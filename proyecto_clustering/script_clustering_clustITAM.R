@@ -14,12 +14,12 @@ datos <- read.csv(paste(rutawork,'ecobici_preprocessed.csv',sep = ""), header = 
 datos_origin<-datos
 str(datos)
 
-proporcion_entrena<-1
-inTraining <- createDataPartition(datos_origin$Genero_Usuario, p = proporcion_entrena, list = FALSE)
-datos <- datos_origin[ inTraining,]
-
-#por lo pronto, me quedo con las variables int
-datos <- datos[c("Edad_Usuario", "Distancia_km", "Duracion_viaje")]
+# proporcion_entrena<-1
+# inTraining <- createDataPartition(datos_origin$Genero_Usuario, p = proporcion_entrena, list = FALSE)
+# datos <- datos_origin[ inTraining,]
+# 
+# #por lo pronto, me quedo con las variables int
+# datos <- datos[c("Edad_Usuario", "Distancia_km", "Duracion_viaje")]
 datos<-datos_origin[c("Edad_Usuario", "Distancia_km", "Duracion_viaje")]
 #----------------------------- PCA ----------------------------------
 #Esta parte nos ayuda a seleccionar la variable mas significativa que explica la dinamica de los datos
@@ -37,6 +37,7 @@ variables <- length(datos)
 sigma <- 1
 kres <- kpca(~., data=datos,features=variables,kernel="rbfdot",kpar = list(sigma = sigma))
 data_kpca <- as.data.frame(kres@rotated)
+print("WEEEEEEEEEY  YA QUEDÓ EL PINCHE PCA")
 #ordena de mayor a menor (por la que tiene mayor varianza)
 datos_prueba <- data_kpca[c("V1","V2")]
 
@@ -110,6 +111,7 @@ for(i in 1:length(res)){
 
 ####---------Empieza reetiquetamiento de Clusters----------####
 df_<-df
+# df_<-df_salvado
 
 for(i in 1:length(res)){
  
@@ -120,22 +122,22 @@ for(i in 1:length(res)){
   if(i==1){
     
     contador_clusters<-0
-    df_[[ncol]]<-df_[[2+i]]
+    df_[[ncol]]<-df_[[3+i]]
     
   }else{
     
     for(j in 1:nrow(df_)){
       
-      if(df_[[2+i]][j]!=0){
+      if(df_[[3+i]][j]!=0){
         
-        df_[[ncol]][j]<-df_[[2+i]][j]+contador_clusters
+        df_[[ncol]][j]<-df_[[3+i]][j]+contador_clusters
         
         }
       
       }
     
     }
-  contador_clusters<-contador_clusters+max(df_[[2+i]])
+  contador_clusters<-contador_clusters+max(df_[[3+i]])
   
 }
 
@@ -237,7 +239,7 @@ for(i in 1:n_clusters){
 
 #KEPLER
 nodes.n <- clusters
-nodes.size<- as.numeric(summary_cluster)/100
+nodes.size<- as.numeric(summary_cluster[,-1])/100
 nodes.tooltips <- paste("Grupo:", 1:nodes.n)
 nodes.names <- 1:nodes.n
 nodes.color <- as.character(1:nodes.n)
