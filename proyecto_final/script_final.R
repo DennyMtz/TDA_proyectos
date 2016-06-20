@@ -9,38 +9,38 @@ library(caret)
 
 #----------------------------- LOAD DATA -----------------------------
 rm(list = ls())
-rutawork = ('/home/denny/itam/topologia/proyecto_clustering/')
-#rutawork = ('/Users/jalfredomb/Dropbox/01_ITAM_Ciencia_de_Datos/2do_semestre/Topologia/TDA_proyectos/proyecto_clustering/')
-datos <- read.csv(paste(rutawork,'ecobici_preprocessed.csv',sep = ""), header = TRUE, sep = ",", quote="\"", dec=".", fill = TRUE)
+rutawork = ('/home/denny/itam/topologia/proyecto_final/')
+datos <- read.csv(paste(rutawork,'contaminantes.csv',sep = ""), header = TRUE, sep = ",", quote="\"", dec=".", fill = TRUE)
 datos_origin<-datos
 str(datos)
+datos<-datos_origin[c("CO","NO","NO2","NOX","O3","PM10","PM2.5","SO2")]
+fechas <- datos_origin["id"]
 
-# proporcion_entrena<-1
-# inTraining <- createDataPartition(datos_origin$Genero_Usuario, p = proporcion_entrena, list = FALSE)
-# datos <- datos_origin[ inTraining,]
-# 
-# #por lo pronto, me quedo con las variables int
-# datos <- datos[c("Edad_Usuario", "Distancia_km", "Duracion_viaje")]
-datos<-datos_origin[c("Edad_Usuario", "Distancia_km", "Duracion_viaje")]
 #----------------------------- PCA ----------------------------------
 #Esta parte nos ayuda a seleccionar la variable mas significativa que explica la dinamica de los datos
 
 #PCA
-# datos.pca <- prcomp(datos ,center = TRUE,scale. = TRUE)
-# summary(datos.pca)
-# str(datos.pca)
-# datos.pca$rotation
-#en este caso observarmos que la variable mas importante es distancia_km
+#install.packages('FactoMineR')
+library('FactoMineR')
+res.pca <- PCA(datos, scale.unit=TRUE, ncp=1, graph=T)
+res.pca$eig[3] #cumulativa percentaje of variance
+datos_prueba <- as.data.frame(c(res.pca$ind[1],res.pca$ind[2]))
+names(datos_prueba)[1] <- "V1"
+names(datos_prueba)[2] <- "V2"
+
+#grafica:
+res.pca = PCA(datos[,1:8], scale.unit=TRUE, ncp=5, graph=T)
 
 
-#KERNEL PCA
-variables <- length(datos)
-sigma <- 1
-kres <- kpca(~., data=datos,features=variables,kernel="rbfdot",kpar = list(sigma = sigma))
-data_kpca <- as.data.frame(kres@rotated)
-print("WEEEEEEEEEY  YA QUEDÓ EL PINCHE PCA")
-#ordena de mayor a menor (por la que tiene mayor varianza)
-datos_prueba <- data_kpca[c("V1","V2")]
+
+# #KERNEL PCA
+# variables <- length(datos)
+# sigma <- 1
+# kres <- kpca(~., data=datos,features=variables,kernel="rbfdot",kpar = list(sigma = sigma))
+# data_kpca <- as.data.frame(kres@rotated)
+# print("WEEEEEEEEEY  YA QUEDÓ EL PINCHE PCA")
+# #ordena de mayor a menor (por la que tiene mayor varianza)
+# datos_prueba <- data_kpca[c("V1","V2")]
 
 #----------------------------- GENERATE INTERVALS----------------------------------
 
@@ -74,7 +74,7 @@ for(i in 1:length(res)){
   # i<-1
   interval_temp<-res[[i]]
   distmat <- as.matrix(dist(interval_temp))
-  neigh <- 10
+  neigh <- 3
   clusters_i<-clustITAM(distmat, neigh)
   interval_temp$Cluster<-numeric(nrow(interval_temp))
   
@@ -85,11 +85,8 @@ for(i in 1:length(res)){
     #  z<-1
       interval_temp$Cluster[as.numeric(clusters_i[[j]][z])]<-j
       #df$Clusters[as.numeric(rownames(interval_temp)[nrow(interval_temp)])]<-j
-      
     }
-  
   }
-  
   res[[i]]<-interval_temp
 }
 
@@ -134,16 +131,14 @@ for(i in 1:length(res)){
         df_[[ncol]][j]<-df_[[3+i]][j]+contador_clusters
         
         }
-      
       }
-    
     }
   contador_clusters<-contador_clusters+max(df_[[3+i]])
   
 }
 
 df_salvado<-df
-df<-df_[,-c(3:8)]
+df<-df_[,-c(3:9)]
 
 ###################################################################################################
 ###################################################################################################
@@ -213,8 +208,8 @@ for(i in seq(nrow(base))){
 }
 
 if(sum(base[[3]])==0){
-  dummy_mat<-base[,4:ncol(base)]
-}else{dummy_mat<-base[,3:ncol(base)]}
+  dummy_mat<-base[,5:ncol(base)-1]
+}else{dummy_mat<-base[,4:ncol(base)-1]}
 
 n_clusters<-ncol(dummy_mat)
 cluster_list<-lapply(1:n_clusters,function (col) {which(dummy_mat[,col]==1)})
@@ -222,9 +217,7 @@ cluster_list<-lapply(1:n_clusters,function (col) {which(dummy_mat[,col]==1)})
 adj_matrix<-matrix(0,nrow=n_clusters,ncol=n_clusters)
 
 for(i in 1:(n_clusters-1)){
-  # i<-1 
   for(j in (i+1):n_clusters){
-    # j<-i+1
     distancia<-setdiff(cluster_list[[i]], cluster_list[[j]])
     cercania<-length(cluster_list[[i]])-length(distancia)
     adj_matrix[i,j]<-round(cercania/min(length(cluster_list[[i]]),length(cluster_list[[j]])),2)
@@ -237,27 +230,93 @@ for(i in 1:n_clusters){
   summary_cluster[1,i]<-length(cluster_list[[i]])
 }
 
+
+
 #######################
 library(dplyr)
 master <- cbind(datos,dummy_mat)
 ww <- paste0("c_",seq(2,clusters,1))
+master <- cbind(master,fechas)
 
 bb <- data.frame()
 for(x in 1:length(ww)){
-  myCols <- (c("Distancia_km","Duracion_viaje", ww[x]))
+  myCols <- (c("CO","NO","NO2", "NOX", "O3", "PM10", "PM2.5", "SO2", ww[x]))
   colNums <- match(myCols,names(master))
-  a  <- (master  %>% select(colNums) %>% filter(master[3+x]=='1') %>% 
-           summarise(dist_prom=mean(Distancia_km),duracion_prom=mean(Duracion_viaje)))
+  a  <- (master  %>% select(colNums) %>% filter(master[8+x]=='1') %>% 
+           summarise(NOX_prom=mean(NOX),PM10_prom=mean(PM10), PM2.5_prom=mean(PM2.5)))
   bb <- rbind.data.frame(bb,a)
 }
 #print(bb)
 
 
+
+master$anio <- (as.numeric(substr(master$id,7,10)))
+for(i in 1:length(master$anio)){
+  if((master$anio[i]==7) | (master$anio[i]==8) | (master$anio[i]==9)){
+    a <- paste0("200",master$anio[i])
+    master$anio[i] <- a
+  }
+  else{
+    a <- paste0("20",master$anio[i])
+    master$anio[i] <- a
+  }
+}
+
+#install.packages('modeest')
+library(modeest)
+
+master$anio <- as.integer(master$anio)
+aa <- data.frame()
+for(x in 1:length(ww)){
+  myCols <- (c(ww[x], "anio"))
+  colNums <- match(myCols,names(master))
+  a  <- (master  %>% select(colNums) %>% filter(master[x+1]=='1') %>% 
+           summarise(mode_anio= mlv(anio, method='mfv')[['M']]))
+  aa <- rbind.data.frame(aa,a)
+}
+print(aa)
+
+
+ss <- data.frame()
+for(i in 1:length(ww)){
+  s <- subset(master, master[i+8] == 1)
+  mode <- mlv(s$anio)
+  ss <- rbind.data.frame(ss,mode$M)
+}
+names(ss) <- "anio"
+
+master$sem <- floor(as.numeric(substring(master$id,4))/10000)
+# for(i in 1:length(master$sem)){
+#   if(nchar(master$sem[i])==6){
+#     a <- substring(master$sem[i],1,2)
+#     master$sem[i] <- as.numeric(a)
+#   } else{
+#     a <- substring(master$sem[i],1,1)
+#     master$sem[i] <- as.numeric(a)
+#   }
+# }
+
+yy <- data.frame()
+for(i in 1:length(ww)){
+  y <- subset(master, master[i+8] == 1)
+  mode <- mlv(y$sem)
+  yy <- rbind.data.frame(yy,as.integer(mode$M))
+}
+names(yy) <- "sem"
+
+
+
+###CREAR TOOLTIPLS
+
+
+bb$tooltip <- paste0("NOX_prom: ",round(bb$NOX_prom,2), " ppb, PM10_prom: ",round(bb$PM10_prom,2), " mm, PM2.5_prom: ",round(bb$PM2.5_prom,2), " mm", " moda año:",ss$anio, ", moda semana:", yy$sem) 
+tooltip <- as.array(bb$tooltip)
+
 #install.packages('gplots')
 library('gplots')
 #vamos a ordenar los colores segun la variable "var_color"
-var_color <- bb$dist_prom
-a <- col2hex(colorRampPalette(c("blue", "red"))(110))
+var_color <- bb$PM2.5_prom
+a <- col2hex(colorRampPalette(c("red", "blue"))(clusters))
 a <- a[order(var_color)]
 c <- paste(shQuote(a,type="cmd"), collapse=", ")
 b <- paste(shQuote(order(var_color),type="cmd"), collapse=", ")
@@ -266,9 +325,10 @@ b <- paste(shQuote(order(var_color),type="cmd"), collapse=", ")
 
 
 #KEPLER
-nodes.n <- clusters+1
-nodes.size<- as.numeric(summary_cluster[,-1])
-nodes.tooltips <- paste("Grupo:", 1:nodes.n)
+nodes.n <- n_clusters
+nodes.size<- as.numeric(summary_cluster)
+#nodes.tooltips <- tooltip
+nodes.tooltips <- paste("Grupo:", 1:nodes.n, tooltip)
 nodes.names <- 1:nodes.n
 nodes.color <- as.character(1:nodes.n)
 
@@ -292,65 +352,24 @@ graphJSON <- sprintf("{\"nodes\": %s, \"links\": %s}", nodesJSON, linksJSON)
 #head(graphJSON)
 
 # ------------  CREAMOS EL HTML ----------------------------------------------------------
-htmlFile <- readLines('/home/denny/itam/topologia/ManifoldLearning/www/index.html')
+htmlFile <- readLines('/home/denny/itam/topologia/proyecto_final/ManifoldLearning/www/index.html')
 #htmlFile <- readLines("www/index.html")
 graph_def_line <- which(grepl("graph =", htmlFile))
 #htmlFile[graph_def_line] <- sprintf("graph = %s;", graphJSON)
 htmlFile[graph_def_line] <- sprintf("graph = %s;", graphJSON)
 #writeLines(htmlFile, "www/index.html")
-writeLines(htmlFile, '/home/denny/itam/topologia/ManifoldLearning/www/index.html')
+writeLines(htmlFile, '/home/denny/itam/topologia/proyecto_final/ManifoldLearning/www/index.html')
+
 ######colores FALTA CAMBIAR COLOR POR VARIABLE
 #modificar el index
-setwd('..')
-setwd("ManifoldLearning/www/")
+#setwd('..')
+setwd("/home/denny/itam/topologia/proyecto_final/ManifoldLearning/www/")
 htmlFile <- readLines('index.html')
 numbers_line <- which(grepl("domain", htmlFile))
 colors_line <- which(grepl("range", htmlFile))
-htmlFile[numbers_line] <- paste0('.domain([',b,']);')
+htmlFile[numbers_line] <- paste0('.domain([',b,'])')
 htmlFile[numbers_line+1] <- paste0('.range([',c,']);')
 writeLines(htmlFile,'index.html')
 ###
-browseURL("file:////home/denny/itam/topologia/ManifoldLearning/www/index.html")
+browseURL("file:////home/denny/itam/topologia/proyecto_final/ManifoldLearning/www/index.html")
 
-#----------------------------OTRA VISUALIZACION IGRAPH ---------------------------------------
-
-colores <- brewer.pal(12,"Set3")
-grafica <- function(mat,colores,tam=c(1),lay='kamada') {
-  if(tam==c(1)) {
-    tam <- rep(1,dim(mat)[1])
-  }
-  g <- graph.adjacency(mat,mode='undirected',weighted=T)
-  g <- simplify(g)
-  if(lay=='kamada') {
-    plot(g,vertex.color=colores,vertex.size=(tam/sum(mat)),edge.arrow.size=.3,rescale=F, layout=layout.kamada.kawai)
-  }
-}
-grafica(adj_matrix,colores,summary_cluster,'kamada')
-
-
-#------------------------OTRA VISUALIZACION QRAGE------------------------
-
-tofdg <- function(matriz){
-  a <- as.data.frame(matrix(0,nrow=dim(matriz)[1]**2/2,ncol=3))
-  contador <- 0
-  for(i in 1:dim(matriz)[2]){
-    col <- matriz[,i]
-    for(j in 1:i){
-      a[contador+1,3] <- as.numeric(matriz[i,j])
-      a[contador+1,2] <- j
-      a[contador+1,1] <- i
-      contador <- contador +1
-    }
-  }
-  a
-}
-
-x <- tofdg(adj.matrix)
-z <- as.data.frame(cbind(seq(1,clusters,1),t(summary_cluster)))
-colores2 <- as.data.frame(cbind(seq(1,clusters,1),t(colores)[1:clusters]))
-
-
-qrage(links=x, width = 1000, height = 800,distance=8000,nodeValue=z
-      ,nodeColor=colores2,linkColor='#00f',arrowColor='#f00'
-      ,cut=0.01,textSize=12
-      ,linkWidth=c(1,8),linkOpacity=c(0.6,1))

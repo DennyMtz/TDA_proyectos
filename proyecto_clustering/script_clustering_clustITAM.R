@@ -5,11 +5,12 @@ library(jsonlite)
 library(igraph)
 library(RColorBrewer)
 library(qrage)
+library(caret)
 
 #----------------------------- LOAD DATA -----------------------------
 rm(list = ls())
-#rutawork = ('/home/denny/itam/topologia/proyecto_clustering/')
-rutawork = ('/Users/jalfredomb/Dropbox/01_ITAM_Ciencia_de_Datos/2do_semestre/Topologia/TDA_proyectos/proyecto_clustering/')
+rutawork = ('/home/denny/itam/topologia/proyecto_clustering/')
+#rutawork = ('/Users/jalfredomb/Dropbox/01_ITAM_Ciencia_de_Datos/2do_semestre/Topologia/TDA_proyectos/proyecto_clustering/')
 datos <- read.csv(paste(rutawork,'ecobici_preprocessed.csv',sep = ""), header = TRUE, sep = ",", quote="\"", dec=".", fill = TRUE)
 datos_origin<-datos
 str(datos)
@@ -73,7 +74,7 @@ for(i in 1:length(res)){
   # i<-1
   interval_temp<-res[[i]]
   distmat <- as.matrix(dist(interval_temp))
-  neigh <- 6
+  neigh <- 10
   clusters_i<-clustITAM(distmat, neigh)
   interval_temp$Cluster<-numeric(nrow(interval_temp))
   
@@ -142,7 +143,7 @@ for(i in 1:length(res)){
 }
 
 df_salvado<-df
-df<-df_[,-c(3:8)]
+df<-df_[,-c(3:9)]
 
 ###################################################################################################
 ###################################################################################################
@@ -212,8 +213,8 @@ for(i in seq(nrow(base))){
 }
 
 if(sum(base[[3]])==0){
-  dummy_mat<-base[,4:ncol(base)]
-}else{dummy_mat<-base[,3:ncol(base)]}
+  dummy_mat<-base[,5:ncol(base)-1]
+}else{dummy_mat<-base[,4:ncol(base)-1]}
 
 n_clusters<-ncol(dummy_mat)
 cluster_list<-lapply(1:n_clusters,function (col) {which(dummy_mat[,col]==1)})
@@ -236,11 +237,45 @@ for(i in 1:n_clusters){
   summary_cluster[1,i]<-length(cluster_list[[i]])
 }
 
+#######################
+library(dplyr)
+master <- cbind(datos,dummy_mat)
+ww <- paste0("c_",seq(2,clusters,1))
+
+bb <- data.frame()
+for(x in 1:length(ww)){
+  myCols <- (c("Distancia_km","Duracion_viaje","Edad_Usuario", ww[x]))
+  colNums <- match(myCols,names(master))
+  a  <- (master  %>% select(colNums) %>% filter(master[3+x]=='1') %>% 
+           summarise(dist_prom=mean(Distancia_km),duracion_prom=mean(Duracion_viaje), edad_prom=mean(Edad_Usuario)))
+  bb <- rbind.data.frame(bb,a)
+}
+#print(bb)
+
+
+###CREAR TOOLTIPLS
+
+"dist_prom: a, duracion_pron: b, edad_prom: c"
+bb$tooltip <- paste0("dist_prom: ",round(bb$dist_prom,2), " km, duracion_prom: ",round(bb$duracion_prom,2), " min, edad_prom: ",round(bb$edad_prom,0), " años" )
+tooltip <- as.array(bb$tooltip)
+
+#install.packages('gplots')
+library('gplots')
+#vamos a ordenar los colores segun la variable "var_color"
+var_color <- bb$dist_prom
+a <- col2hex(colorRampPalette(c("red", "blue"))(clusters))
+a <- a[order(var_color)]
+c <- paste(shQuote(a,type="cmd"), collapse=", ")
+b <- paste(shQuote(order(var_color),type="cmd"), collapse=", ")
+##############################
+
+
 
 #KEPLER
-nodes.n <- clusters
-nodes.size<- as.numeric(summary_cluster[,-1])/100
-nodes.tooltips <- paste("Grupo:", 1:nodes.n)
+nodes.n <- n_clusters
+nodes.size<- as.numeric(summary_cluster)/35
+#nodes.tooltips <- tooltip
+nodes.tooltips <- paste("Grupo:", 1:nodes.n, tooltip)
 nodes.names <- 1:nodes.n
 nodes.color <- as.character(1:nodes.n)
 
@@ -264,17 +299,26 @@ graphJSON <- sprintf("{\"nodes\": %s, \"links\": %s}", nodesJSON, linksJSON)
 #head(graphJSON)
 
 # ------------  CREAMOS EL HTML ----------------------------------------------------------
-# htmlFile <- readLines('/home/denny/itam/topologia/ManifoldLearning/www/index.html')
-htmlFile <- readLines('/Users/jalfredomb/Dropbox/01_ITAM_Ciencia_de_Datos/2do_semestre/Topologia/TDA_proyectos//ManifoldLearning/www/index.html')
+htmlFile <- readLines('/home/denny/itam/topologia/ManifoldLearning/www/index.html')
 #htmlFile <- readLines("www/index.html")
 graph_def_line <- which(grepl("graph =", htmlFile))
 #htmlFile[graph_def_line] <- sprintf("graph = %s;", graphJSON)
 htmlFile[graph_def_line] <- sprintf("graph = %s;", graphJSON)
 #writeLines(htmlFile, "www/index.html")
-#writeLines(htmlFile, '/home/denny/itam/topologia/ManifoldLearning/www/index.html')
-writeLines(htmlFile,'/Users/jalfredomb/Dropbox/01_ITAM_Ciencia_de_Datos/2do_semestre/Topologia/TDA_proyectos//ManifoldLearning/www/index.html')
-browseURL("file:////Users/jalfredomb/Dropbox/01_ITAM_Ciencia_de_Datos/2do_semestre/Topologia/TDA_proyectos//ManifoldLearning/www/index.html")
+writeLines(htmlFile, '/home/denny/itam/topologia/ManifoldLearning/www/index.html')
 
+######colores FALTA CAMBIAR COLOR POR VARIABLE
+#modificar el index
+setwd('..')
+setwd("ManifoldLearning/www/")
+htmlFile <- readLines('index.html')
+numbers_line <- which(grepl("domain", htmlFile))
+colors_line <- which(grepl("range", htmlFile))
+htmlFile[numbers_line] <- paste0('.domain([',b,'])')
+htmlFile[numbers_line+1] <- paste0('.range([',c,']);')
+writeLines(htmlFile,'index.html')
+###
+browseURL("file:////home/denny/itam/topologia/ManifoldLearning/www/index.html")
 
 #----------------------------OTRA VISUALIZACION IGRAPH ---------------------------------------
 
